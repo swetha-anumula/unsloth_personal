@@ -15,6 +15,7 @@
 import triton
 import triton.language as tl
 import torch
+from typing import Optional 
 from .utils import (
     calculate_settings,
     MAX_FUSED_SIZE,
@@ -385,36 +386,41 @@ pass
 
 
 def fast_cross_entropy_loss(
-    logits,
-    labels,
-    logit_softcapping = 0,
-    logit_scaling = 0,
-    n_items = None,
+    # REMOVE logits. This is the single largest fix.
+    hidden_states: torch.Tensor,
+    labels: torch.Tensor,
+    lm_head_proj: torch.nn.Module, # The actual module used for W
+    logit_softcapping: float = 0,
+    logit_scaling: float = 0,
+    n_items: Optional[int] = None,
 ):
+    from unsloth.kernels.fused_linear_cross_entropy import fused_linear_cross_entropy
     """
     Arguments:
-        logits: (batch, seq_len, vocab_size)
+        hidden_states: (batch, seq_len, hidden_size) - Input to the LM Head
         labels: (batch, seq_len,)
     Returns:
-        losses: float
+        losses: float (scalar mean loss)
     """
-    batch, seq_len, d = logits.shape
+    batch, seq_len, hd = hidden_states.shape
     assert(labels.shape == (batch, seq_len))
 
-    loss = Fast_CrossEntropyLoss.apply(
-        logits.view(batch*seq_len, d),
-        labels.view(-1),
+    # --- THE M7 FUSION CALL ---
+    # This single call executes GEMM + CE Loss Forward/Backward (including all LoRA/FP8/CE kernels)
+    loss_vector = fused_linear_cross_entropy.apply(
+        hidden_states, # Passes X
+        labels,        # Passes labels
+        lm_head_proj,  # Passes W_LM_Head module
         logit_softcapping,
         logit_scaling,
     )
+
     if n_items is None:
+        # Calculate normalization factor
         n_items = torch.count_nonzero(labels != -100)
-    return loss.sum() / n_items
-pass
-if (Version(torch.__version__) < Version("2.4.0")) and \
-    not hasattr(fast_cross_entropy_loss, "__wrapped__"):
-    fast_cross_entropy_loss = torch._disable_dynamo(fast_cross_entropy_loss)
-pass
+        
+    # loss_vector is the per-row loss from the Fused_Linear_CrossEntropy forward
+    return loss_vector.sum() / n_items
 
 # Patch CE Losses in transformers
 def patch_loss_functions(torch_compile = True):

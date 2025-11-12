@@ -25,6 +25,7 @@ from .granite import FastGraniteModel
 from .llama   import FastLlamaModel, logger
 from .mistral import FastMistralModel
 from .qwen2   import FastQwen2Model
+from .qwen2_vl import FastQwen2VLModel # <<< ADD THIS LINE
 from .qwen3   import FastQwen3Model
 from .qwen3_moe import FastQwen3MoeModel
 from .cohere  import FastCohereModel
@@ -405,6 +406,8 @@ class FastLanguageModel(FastLlamaModel):
             dispatch_model = FastGemma2Model
         elif model_type == "qwen2":
             dispatch_model = FastQwen2Model
+        elif model_type == "qwen2_5_vl":
+            dispatch_model = FastQwen2VLModel
         elif model_type == "qwen3":# or model_type == "qwen3_moe":
             if not SUPPORTS_QWEN3 or not SUPPORTS_QWEN3_MOE:
                 raise ImportError(

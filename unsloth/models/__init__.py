@@ -19,6 +19,7 @@ from .qwen2     import FastQwen2Model
 from .qwen3     import FastQwen3Model
 from .qwen3_moe import FastQwen3MoeModel
 from .granite   import FastGraniteModel
+from .qwen2_vl import FastQwenImagePatcher
 try:
     from .falcon_h1 import FastFalconH1Model
 except:
