@@ -28,6 +28,7 @@ from .qwen2   import FastQwen2Model
 from .qwen2_vl import FastQwen2VLModel # <<< ADD THIS LINE
 from .qwen3   import FastQwen3Model
 from .qwen3_moe import FastQwen3MoeModel
+from .qwen_2_5vl import FastQwen2_5VLModel
 from .cohere  import FastCohereModel
 from transformers import AutoConfig
 from transformers import __version__ as transformers_version

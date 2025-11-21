@@ -12,7 +12,7 @@ from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2_5_VLRotaryE
 # Triton-powered kernel from the unsloth library.
 from unsloth.kernels import fast_rms_layernorm
 # ====================================================================
-
+from unsloth.kernels.swiglu import swiglu_fg_kernel
 
 # <<< WE HAVE DELETED the old, slow `fast_rms_layernorm` function >>>
 # def fast_rms_layernorm(self, X, gemma = False):
@@ -24,12 +24,30 @@ torch_nn_functional_linear = torch.nn.functional.linear
 
 # This MLP/FFN patch is fine as it is. It uses standard PyTorch ops
 # that autograd can handle, and it provides a speed benefit through fusion.
-def fast_swiglu_forward(self, X):
+'''def fast_swiglu_forward(self, X):
     gate = torch_nn_functional_linear(X, self.gate_proj.weight, self.gate_proj.bias)
     up   = torch_nn_functional_linear(X, self.up_proj.weight, self.up_proj.bias)
     gate = torch_nn_functional_silu(gate, inplace = True)
     gate *= up 
     down = torch_nn_functional_linear(gate, self.down_proj.weight, self.down_proj.bias)
+    
+    return down'''
+def mlp_forward_with_direct_kernel(self, X):
+    """
+    An experimental MLP forward pass that directly calls the swiglu_fg_kernel.
+    This is for educational purposes and is expected to be SLOWER than
+    the compiler-fused `fast_swiglu_forward`.
+    """
+    # Step 1 & 2: Perform the first two linear layers
+    gate = torch_nn_functional_linear(X, self.gate_proj.weight, self.gate_proj.bias)
+    up   = torch_nn_functional_linear(X, self.up_proj.weight, self.up_proj.bias)
+
+    # Step 3: Call the Triton kernel directly for the activation
+    # This is the `f = e * sigmoid(e); h = f * g` part.
+    activated_gate = swiglu_fg_kernel(gate, up)
+    
+    # Step 4: Perform the final linear layer
+    down = torch_nn_functional_linear(activated_gate, self.down_proj.weight, self.down_proj.bias)
     
     return down
 
